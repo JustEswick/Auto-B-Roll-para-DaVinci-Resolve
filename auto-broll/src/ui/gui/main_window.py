@@ -175,33 +175,45 @@ class StatusBar(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 0, 16, 0)
         
-        # Estado de DaVinci Resolve
-        self.resolve_status = QLabel("⚪ DaVinci Resolve: No conectado")
-        self.resolve_status.setStyleSheet("color: #888899; font-size: 12px;")
+        # Modo de exportación (script interno)
+        self.resolve_status = QLabel("📁 Modo: Script DaVinci")
+        self.resolve_status.setStyleSheet("color: #6366F1; font-size: 12px;")
+        self.resolve_status.setToolTip(
+            "Los assets se exportan como script ejecutable\n"
+            "dentro de DaVinci Resolve (compatible con Free)"
+        )
         layout.addWidget(self.resolve_status)
         
         layout.addStretch()
         
-        # Estado de APIs
-        self.api_status = QLabel("APIs: Configurando...")
+        # Estado de APIs de Stock
+        self.api_status = QLabel("APIs: Verificando...")
         self.api_status.setStyleSheet("color: #888899; font-size: 12px;")
         layout.addWidget(self.api_status)
     
     def set_resolve_connected(self, connected: bool) -> None:
-        if connected:
-            self.resolve_status.setText("🟢 DaVinci Resolve: Conectado")
-            self.resolve_status.setStyleSheet("color: #4ADE80; font-size: 12px;")
-        else:
-            self.resolve_status.setText("🔴 DaVinci Resolve: No conectado")
-            self.resolve_status.setStyleSheet("color: #F87171; font-size: 12px;")
+        """Ya no se usa - mantenido por compatibilidad."""
+        pass  # No hacemos nada, siempre mostramos modo script
     
     def set_api_status(self, count: int) -> None:
         if count > 0:
-            self.api_status.setText(f"✓ {count} APIs configuradas")
+            self.api_status.setText(f"✓ {count} API{'s' if count > 1 else ''} de Stock")
             self.api_status.setStyleSheet("color: #4ADE80; font-size: 12px;")
         else:
-            self.api_status.setText("⚠️ Sin APIs configuradas")
+            self.api_status.setText("⚠️ Configura APIs en ⚙️")
             self.api_status.setStyleSheet("color: #FBBF24; font-size: 12px;")
+    
+    def refresh_api_status(self) -> None:
+        """Refresca el estado de las APIs leyendo la configuración actual."""
+        import os
+        count = 0
+        if os.getenv("PEXELS_API_KEY"):
+            count += 1
+        if os.getenv("PIXABAY_API_KEY"):
+            count += 1
+        if os.getenv("UNSPLASH_ACCESS_KEY"):
+            count += 1
+        self.set_api_status(count)
 
 
 class MainWindow(QMainWindow):

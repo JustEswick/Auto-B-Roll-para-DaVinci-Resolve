@@ -432,12 +432,39 @@ class PreviewPanel(QWidget):
         
         actions_layout.addStretch()
         
-        self.insert_btn = QPushButton("🎬 Insertar en Timeline")
-        self.insert_btn.setEnabled(False)
-        self.insert_btn.setMinimumHeight(44)
-        self.insert_btn.setMinimumWidth(200)
-        self.insert_btn.setCursor(Qt.PointingHandCursor)
-        self.insert_btn.setStyleSheet("""
+        # Botón para descargar assets seleccionados
+        self.download_btn = QPushButton("⬇️ Descargar Assets")
+        self.download_btn.setEnabled(False)
+        self.download_btn.setMinimumHeight(44)
+        self.download_btn.setCursor(Qt.PointingHandCursor)
+        self.download_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #059669;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6B7280;
+            }
+        """)
+        self.download_btn.clicked.connect(self._on_download)
+        actions_layout.addWidget(self.download_btn)
+        
+        # Botón para exportar a DaVinci
+        self.export_btn = QPushButton("🎬 Exportar a DaVinci")
+        self.export_btn.setEnabled(False)
+        self.export_btn.setMinimumHeight(44)
+        self.export_btn.setMinimumWidth(180)
+        self.export_btn.setCursor(Qt.PointingHandCursor)
+        self.export_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6366F1;
                 color: white;
@@ -458,8 +485,13 @@ class PreviewPanel(QWidget):
                 color: #6B7280;
             }
         """)
-        self.insert_btn.clicked.connect(self._on_insert)
-        actions_layout.addWidget(self.insert_btn)
+        self.export_btn.setToolTip(
+            "Genera un script Python que se ejecuta\n"
+            "dentro de DaVinci Resolve para importar\n"
+            "los assets al timeline."
+        )
+        self.export_btn.clicked.connect(self._on_export_davinci)
+        actions_layout.addWidget(self.export_btn)
         
         layout.addLayout(actions_layout)
     
@@ -502,7 +534,10 @@ class PreviewPanel(QWidget):
         self.assets_label.setText(f"{asset_count} assets encontrados")
         self.selected_label.setText(f"{selected_count} seleccionados")
         
-        self.insert_btn.setEnabled(selected_count > 0)
+        # Habilitar botones si hay selección
+        has_selection = selected_count > 0
+        self.download_btn.setEnabled(has_selection)
+        self.export_btn.setEnabled(has_selection)
     
     @Slot()
     def _on_select_all(self) -> None:
@@ -521,15 +556,69 @@ class PreviewPanel(QWidget):
         self._update_stats()
     
     @Slot()
-    def _on_insert(self) -> None:
-        """Inserta los assets seleccionados en el timeline."""
+    def _on_download(self) -> None:
+        """Descarga los assets seleccionados."""
+        from PySide6.QtWidgets import QMessageBox, QFileDialog
+        
         selected_ids = []
         for section in self._concept_sections:
             selected_ids.extend(section.get_selected_assets())
         
-        if selected_ids:
-            self.assets_approved.emit(selected_ids)
-            self.assets_selected.emit(selected_ids)
+        if not selected_ids:
+            return
+        
+        # Seleccionar carpeta de destino
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Seleccionar Carpeta de Descarga",
+            "",
+        )
+        
+        if folder:
+            QMessageBox.information(
+                self,
+                "Descarga",
+                f"Se descargarán {len(selected_ids)} assets a:\n{folder}\n\n"
+                "Esta funcionalidad se conectará con el servicio de descarga."
+            )
+            # TODO: Conectar con services.start_download()
+    
+    @Slot()
+    def _on_export_davinci(self) -> None:
+        """Genera script de importación para DaVinci Resolve."""
+        from PySide6.QtWidgets import QMessageBox, QFileDialog
+        from pathlib import Path
+        
+        selected_ids = []
+        for section in self._concept_sections:
+            selected_ids.extend(section.get_selected_assets())
+        
+        if not selected_ids:
+            return
+        
+        # Obtener carpeta de scripts de DaVinci
+        import os
+        appdata = os.environ.get("APPDATA", "")
+        scripts_folder = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Comp"
+        
+        if not scripts_folder.exists():
+            scripts_folder.mkdir(parents=True, exist_ok=True)
+        
+        QMessageBox.information(
+            self,
+            "Exportar a DaVinci",
+            f"Se generará un script para {len(selected_ids)} assets.\n\n"
+            f"El script se guardará en:\n{scripts_folder}\n\n"
+            "Pasos para usar:\n"
+            "1. Primero descarga los assets\n"
+            "2. Abre DaVinci Resolve\n"
+            "3. Ve a Workspace → Scripts → auto_broll_import\n"
+            "4. Los assets se importarán al timeline"
+        )
+        
+        # Emitir señal para procesar
+        self.assets_approved.emit(selected_ids)
+        self.assets_selected.emit(selected_ids)
     
     def load_demo_data(self) -> None:
         """Carga datos de demostración."""
