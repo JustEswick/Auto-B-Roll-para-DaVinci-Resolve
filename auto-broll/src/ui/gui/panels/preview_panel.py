@@ -596,10 +596,10 @@ class PreviewPanel(QWidget):
         if not selected_ids:
             return
         
-        # Obtener carpeta de scripts de DaVinci
+        # Obtener carpeta de scripts de DaVinci (Edit/Auto-B-Roll)
         import os
         appdata = os.environ.get("APPDATA", "")
-        scripts_folder = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Comp"
+        scripts_folder = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Edit" / "Auto-B-Roll"
         
         if not scripts_folder.exists():
             scripts_folder.mkdir(parents=True, exist_ok=True)
@@ -608,11 +608,11 @@ class PreviewPanel(QWidget):
             self,
             "Exportar a DaVinci",
             f"Se generará un script para {len(selected_ids)} assets.\n\n"
-            f"El script se guardará en:\n{scripts_folder}\n\n"
+            f"Script guardado en:\n{scripts_folder}\n\n"
             "Pasos para usar:\n"
             "1. Primero descarga los assets\n"
             "2. Abre DaVinci Resolve\n"
-            "3. Ve a Workspace → Scripts → auto_broll_import\n"
+            "3. Ve a Workspace → Scripts → Edit → Auto-B-Roll\n"
             "4. Los assets se importarán al timeline"
         )
         

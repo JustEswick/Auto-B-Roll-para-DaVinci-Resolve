@@ -277,15 +277,30 @@ if __name__ == "__main__":
         """
         Obtiene la carpeta de scripts de DaVinci Resolve.
         
+        La estructura de carpetas en DaVinci Resolve 20 es:
+        Support/Fusion/Scripts/
+            ├── Color/
+            ├── Comp/
+            ├── Delivery/
+            ├── Edit/      <- Usamos esta para timeline
+            ├── Tool/
+            ├── Utility/
+            └── Views/
+        
+        Creamos una subcarpeta Auto-B-Roll dentro de Edit.
+        
         Returns:
-            Ruta a la carpeta de scripts
+            Ruta a la carpeta de scripts (Edit/Auto-B-Roll)
         """
         import os
         
-        # Windows
+        # Windows - AppData/Roaming
         appdata = os.environ.get("APPDATA", "")
         if appdata:
-            scripts_folder = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Comp"
+            # Ruta correcta para DaVinci Resolve 20
+            base_scripts = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts"
+            # Usar Edit porque es para operaciones de timeline
+            scripts_folder = base_scripts / "Edit" / "Auto-B-Roll"
             return scripts_folder
         
         # Fallback

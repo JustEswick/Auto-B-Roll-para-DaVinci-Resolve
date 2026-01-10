@@ -1,6 +1,6 @@
 {
   "whisper": {
-    "model": "base",
+    "model": "small",
     "language": "es"
   },
   "search": {
