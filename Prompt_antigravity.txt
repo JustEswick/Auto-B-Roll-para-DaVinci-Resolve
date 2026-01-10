@@ -1,0 +1,55 @@
+# ROL:
+Actúa como un Arquitecto de Soluciones Senior y Product Manager experto. Tu objetivo es transformar una idea abstracta en un Plan de Proyecto Técnico y Funcional (PRD) exhaustivo, listo para ser entregado a un equipo de desarrollo.
+
+# OBJETIVO:
+Desarrollar una hoja de ruta completa para el proyecto descrito al final de este prompt, asegurando viabilidad técnica, escalabilidad y claridad funcional.
+
+# ESTRUCTURA DE LA RESPUESTA:
+
+## 1. ANÁLISIS DE NECESIDADES Y ALCANCE (El "Por qué")
+* **Problem Statement:** Define claramente el dolor o problema que este software resuelve.
+* **Público Objetivo:** ¿Quién usará el sistema y en qué contexto?
+* **Propuesta de Valor:** ¿Qué hace que esta solución sea única o necesaria?
+
+## 2. REQUERIMIENTOS FUNCIONALES (El "Qué")
+* **Módulos Principales:** Lista los componentes clave del sistema (ej. Autenticación, Dashboard, Motor de Procesamiento).
+* **User Stories (Formato Ágil):** Desglosa las 5-7 funcionalidades críticas en formato "Como [usuario], quiero [acción], para [beneficio]".
+* **Flujo Crítico:** Describe paso a paso el "Happy Path" o flujo principal del usuario dentro de la aplicación.
+
+## 3. APARTADO TÉCNICO DETALLADO (El "Cómo")
+*Este es el apartado más importante. Sé específico y técnico.*
+* **Tech Stack Recomendado:**
+    * Frontend (Framework, librerías de estado/UI).
+    * Backend (Lenguaje, Framework, API Style - REST/GraphQL).
+    * Base de Datos (SQL vs NoSQL y justificación).
+    * Infraestructura/Cloud (AWS/GCP/Azure, Docker, CI/CD).
+* **Arquitectura del Sistema:**
+    * Describe la arquitectura (Monolito, Microservicios, Serverless) y por qué se elige.
+    * Diseño de Base de Datos: Propón un esquema preliminar de las tablas/colecciones principales y sus relaciones (ERD textual).
+* **Integraciones y APIs:** Lista endpoints clave necesarios y servicios de terceros (ej. Stripe, OpenAI API, Firebase Auth).
+* **Seguridad y Rendimiento:** Estrategias para manejo de datos sensibles y optimización de latencia.
+
+## 4. PLANIFICACIÓN Y ROADMAP
+* **Fase 1: MVP (Producto Mínimo Viable):** ¿Qué es lo mínimo indispensable para lanzar?
+* **Fase 2: Escalabilidad:** Funciones "nice-to-have" para futuras versiones.
+* **Estimación de Riesgos:** Posibles cuellos de botella técnicos o de negocio.
+
+---
+
+# [INFORMACIÓN DEL PROYECTO]
+**Nombre del Proyecto:** Auto-B-Roll para DaVinci Resolve
+**Descripción General:**
+Un sistema de automatización diseñado para agilizar la edición de videos tipo "talking head" (bustos parlantes). El software debe analizar el audio del video principal, entender el contexto semántico (de qué se está hablando) y buscar automáticamente material visual de apoyo (imágenes o videos de stock) para superponerlos en la línea de tiempo.
+
+**Flujo deseado:**
+1. Usuario carga video en DaVinci Resolve.
+2. El script analiza el audio (Speech-to-Text).
+3. Identifica palabras clave o conceptos visualizables.
+4. Busca y descarga assets libres de derechos (o de librerías conectadas).
+5. Importa y coloca los assets en la línea de tiempo sincronizados con la palabra hablada.
+
+**Restricciones y Requisitos Técnicos:**
+* **Core Software:** Debe funcionar obligatoriamente sobre **DaVinci Resolve 20** (o versión más estable reciente, 19).
+* **Método de Integración:** Uso de la **DaVinci Resolve Scripting API** (Python).
+* **Entorno:** Ejecución local en escritorio (no es una web app SaaS por el momento).
+* **Assets:** Debe priorizar el uso de APIs de stock gratuitas o accesibles para el MVP.

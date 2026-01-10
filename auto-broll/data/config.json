@@ -1,0 +1,19 @@
+{
+  "whisper": {
+    "model": "base",
+    "language": "es"
+  },
+  "search": {
+    "results_per_api": 10,
+    "preferred_orientation": "landscape",
+    "preferred_type": "video"
+  },
+  "timeline": {
+    "default_clip_duration": 3.0,
+    "target_track": 2,
+    "fade_duration": 0.5,
+    "auto_insert": false
+  },
+  "theme": "dark",
+  "language": "es"
+}
