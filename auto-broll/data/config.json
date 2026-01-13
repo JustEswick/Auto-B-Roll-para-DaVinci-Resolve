@@ -1,12 +1,12 @@
 {
   "whisper": {
-    "model": "small",
+    "model": "medium",
     "language": "es"
   },
   "search": {
     "results_per_api": 10,
     "preferred_orientation": "landscape",
-    "preferred_type": "video"
+    "preferred_type": "all"
   },
   "timeline": {
     "default_clip_duration": 3.0,

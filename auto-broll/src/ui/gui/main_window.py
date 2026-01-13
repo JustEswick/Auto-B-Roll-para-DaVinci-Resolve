@@ -329,6 +329,15 @@ class MainWindow(QMainWindow):
         from src.services import get_services
         services = get_services()
         services.search_finished.connect(self.preview_panel.load_search_results)
+        
+        # Cuando se guardan settings, refrescar estado de APIs en StatusBar
+        self.settings_panel.settings_changed.connect(self._on_settings_changed)
+    
+    @Slot()
+    def _on_settings_changed(self) -> None:
+        """Maneja cuando se guardan los settings."""
+        # Refrescar estado de APIs en StatusBar
+        self.status_bar.refresh_api_status()
     
     @Slot(object)
     def _on_analysis_ready(self, result) -> None:
@@ -428,12 +437,8 @@ class MainWindow(QMainWindow):
     
     def _init_state(self) -> None:
         """Inicializa el estado de la aplicación."""
-        # TODO: Verificar conexión con DaVinci Resolve
-        # TODO: Verificar APIs configuradas
-        
-        # Por ahora, mostrar estado inicial
-        self.status_bar.set_resolve_connected(False)
-        self.status_bar.set_api_status(0)
+        # Refrescar estado de APIs leyendo .env
+        self.status_bar.refresh_api_status()
     
     @Slot(int)
     def _on_page_changed(self, index: int) -> None:

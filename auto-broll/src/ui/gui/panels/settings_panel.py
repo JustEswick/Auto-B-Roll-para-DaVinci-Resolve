@@ -160,6 +160,7 @@ class SettingsPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._setup_ui()
+        self._load_config()  # Cargar valores guardados
     
     def _setup_ui(self) -> None:
         """Configura la interfaz del panel."""
@@ -268,6 +269,8 @@ class SettingsPanel(QWidget):
     
     def _create_api_section(self) -> QGroupBox:
         """Crea la sección de API keys."""
+        import os
+        
         group = QGroupBox("🔑 API Keys")
         group.setStyleSheet("""
             QGroupBox {
@@ -292,24 +295,32 @@ class SettingsPanel(QWidget):
         layout.setContentsMargins(16, 24, 16, 16)
         layout.setSpacing(12)
         
+        # Cargar valores existentes del entorno
+        pexels_key = os.getenv("PEXELS_API_KEY", "")
+        pixabay_key = os.getenv("PIXABAY_API_KEY", "")
+        unsplash_key = os.getenv("UNSPLASH_ACCESS_KEY", "")
+        
         # Pexels
         self.pexels_input = APIKeyInput(
             "Pexels",
-            "Obtén tu API key en: https://www.pexels.com/api/"
+            "Obtén tu API key en: https://www.pexels.com/api/",
+            current_value=pexels_key
         )
         layout.addWidget(self.pexels_input)
         
         # Pixabay
         self.pixabay_input = APIKeyInput(
             "Pixabay",
-            "Obtén tu API key en: https://pixabay.com/api/docs/"
+            "Obtén tu API key en: https://pixabay.com/api/docs/",
+            current_value=pixabay_key
         )
         layout.addWidget(self.pixabay_input)
         
         # Unsplash
         self.unsplash_input = APIKeyInput(
             "Unsplash",
-            "Obtén tu Access Key en: https://unsplash.com/developers"
+            "Obtén tu Access Key en: https://unsplash.com/developers",
+            current_value=unsplash_key
         )
         layout.addWidget(self.unsplash_input)
         
@@ -665,6 +676,51 @@ class SettingsPanel(QWidget):
         
         return group
     
+    def _load_config(self) -> None:
+        """Carga la configuración guardada en los widgets."""
+        try:
+            from src.config import get_config
+            config = get_config()
+            
+            # Whisper
+            if config.whisper.model:
+                self.model_combo.setCurrentText(config.whisper.model)
+            
+            # Idioma - convertir de código a nombre
+            lang_reverse_map = {"es": "Español", "en": "English", None: "Auto-detectar"}
+            if config.whisper.language in lang_reverse_map:
+                self.lang_combo.setCurrentText(lang_reverse_map[config.whisper.language])
+            
+            # Search
+            if config.search.results_per_api:
+                self.results_spin.setValue(config.search.results_per_api)
+            
+            # Tipo preferido
+            type_map_reverse = {"video": "Videos", "image": "Imágenes", "all": "Ambos"}
+            if config.search.preferred_type in type_map_reverse:
+                self.type_combo.setCurrentText(type_map_reverse[config.search.preferred_type])
+            
+            # Orientación
+            orient_map_reverse = {
+                "landscape": "Landscape (16:9)",
+                "portrait": "Portrait (9:16)",
+                "square": "Square (1:1)"
+            }
+            if config.search.preferred_orientation in orient_map_reverse:
+                self.orient_combo.setCurrentText(orient_map_reverse[config.search.preferred_orientation])
+            
+            # Timeline
+            if config.timeline.default_clip_duration:
+                self.duration_spin.setValue(config.timeline.default_clip_duration)
+            if config.timeline.target_track:
+                self.track_spin.setValue(config.timeline.target_track)
+            if hasattr(config.timeline, 'auto_insert'):
+                self.auto_insert_check.setChecked(config.timeline.auto_insert)
+                
+        except Exception as e:
+            # Si falla la carga, usar valores por defecto (ya están en los widgets)
+            print(f"[DEBUG] No se pudo cargar config: {e}")
+    
     @Slot()
     def _on_reset(self) -> None:
         """Restaura los valores por defecto."""
@@ -739,7 +795,19 @@ class SettingsPanel(QWidget):
             config.whisper.model = self.model_combo.currentText()
             lang_map = {"Español": "es", "English": "en", "Auto-detectar": None}
             config.whisper.language = lang_map.get(self.lang_combo.currentText(), "es")
+            
+            # Search
             config.search.results_per_api = self.results_spin.value()
+            type_map = {"Videos": "video", "Imágenes": "image", "Ambos": "all"}
+            config.search.preferred_type = type_map.get(self.type_combo.currentText(), "video")
+            orient_map = {
+                "Landscape (16:9)": "landscape",
+                "Portrait (9:16)": "portrait",
+                "Square (1:1)": "square"
+            }
+            config.search.preferred_orientation = orient_map.get(self.orient_combo.currentText(), "landscape")
+            
+            # Timeline
             config.timeline.default_clip_duration = self.duration_spin.value()
             config.timeline.target_track = self.track_spin.value()
             config.timeline.auto_insert = self.auto_insert_check.isChecked()
