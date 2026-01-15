@@ -247,6 +247,9 @@ class ConceptSection(QFrame):
         
         layout.addWidget(assets_container)
     
+    # Señal para notificar cuando cambia la selección de un asset
+    selection_changed = Signal(str, bool)  # asset_id, selected
+    
     def add_asset(self, asset_id: str, source: str, asset_type: str) -> AssetCard:
         """Añade un asset a la sección."""
         card = AssetCard(asset_id, self._keyword, source, asset_type)
@@ -254,6 +257,8 @@ class ConceptSection(QFrame):
         # Insertar antes del stretch (último elemento)
         insert_pos = self.assets_layout.count() - 1
         self.assets_layout.insertWidget(insert_pos, card)
+        # Reenviar señal de selección
+        card.selection_changed.connect(self.selection_changed)
         return card
     
     def get_selected_assets(self) -> List[str]:
@@ -508,11 +513,17 @@ class PreviewPanel(QWidget):
         self.empty_state.setVisible(False)
         
         section = ConceptSection(keyword, timestamp)
+        section.selection_changed.connect(self._on_selection_changed)
         self._concept_sections.append(section)
         self.scroll_layout.insertWidget(self.scroll_layout.count() - 1, section)
         
         self._update_stats()
         return section
+    
+    @Slot(str, bool)
+    def _on_selection_changed(self, asset_id: str, selected: bool) -> None:
+        """Actualiza estadísticas cuando cambia la selección de un asset."""
+        self._update_stats()
     
     def clear_concepts(self) -> None:
         """Limpia todos los conceptos."""
