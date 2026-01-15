@@ -87,133 +87,208 @@ Fecha: {date}
 Proyecto: {project_name}
 """
 
-import json
-from pathlib import Path
+import os
 
 # Datos de importación embebidos
 IMPORT_DATA = {import_data_json}
 
-def get_resolve():
-    """Obtiene la instancia de Resolve (funciona desde script interno)."""
-    try:
-        import DaVinciResolveScript as dvr
-        return dvr.scriptapp("Resolve")
-    except:
-        # Fallback para ejecución desde consola de Fusion
-        return resolve  # Variable global disponible en scripts internos
-
 def main():
-    resolve = get_resolve()
-    if not resolve:
-        print("Error: No se pudo conectar a DaVinci Resolve")
+    print("=" * 50)
+    print("AUTO-B-ROLL IMPORT SCRIPT")
+    print("=" * 50)
+    
+    # En scripts internos de DaVinci, 'resolve' ya está disponible
+    try:
+        res = resolve
+    except NameError:
+        print("ERROR: Variable 'resolve' no disponible.")
+        print("Este script debe ejecutarse desde:")
+        print("  DaVinci Resolve > Workspace > Scripts > Edit")
         return
     
-    pm = resolve.GetProjectManager()
+    if not res:
+        print("ERROR: resolve es None")
+        return
+    
+    print("OK: Conexion con Resolve establecida")
+    
+    pm = res.GetProjectManager()
+    if not pm:
+        print("ERROR: No se pudo obtener ProjectManager")
+        return
+    
     project = pm.GetCurrentProject()
     if not project:
-        print("Error: No hay proyecto abierto")
+        print("ERROR: No hay proyecto abierto")
+        print("Abre un proyecto primero")
         return
+    
+    print(f"OK: Proyecto: {{project.GetName()}}")
     
     media_pool = project.GetMediaPool()
-    timeline = project.GetCurrentTimeline()
-    
-    if not timeline:
-        print("Error: No hay timeline activo")
+    if not media_pool:
+        print("ERROR: No se pudo obtener MediaPool")
         return
     
-    fps = float(timeline.GetSetting("timelineFrameRate") or 24)
+    timeline = project.GetCurrentTimeline()
+    if not timeline:
+        print("AVISO: No hay timeline activo (opcional)")
+    else:
+        print(f"OK: Timeline: {{timeline.GetName()}}")
     
-    print(f"Proyecto: {{project.GetName()}}")
-    print(f"Timeline: {{timeline.GetName()}}")
-    print(f"FPS: {{fps}}")
-    print(f"Clips a importar: {{len(IMPORT_DATA['clips'])}}")
+    clips = IMPORT_DATA.get("clips", [])
+    print(f"Clips a procesar: {{len(clips)}}")
     print("-" * 50)
     
-    # Crear bin para B-Roll
+    if not clips:
+        print("No hay clips para importar")
+        return
+    
+    # Obtener o crear carpeta Auto-B-Roll
     root_folder = media_pool.GetRootFolder()
     broll_bin = None
     
-    for subfolder in root_folder.GetSubFolderList():
-        if subfolder.GetName() == "Auto-B-Roll":
-            broll_bin = subfolder
-            break
+    subfolders = root_folder.GetSubFolderList()
+    if subfolders:
+        for sf in subfolders:
+            if sf.GetName() == "Auto-B-Roll":
+                broll_bin = sf
+                print("Usando bin existente: Auto-B-Roll")
+                break
     
     if not broll_bin:
         broll_bin = media_pool.AddSubFolder(root_folder, "Auto-B-Roll")
-        print("Creado bin: Auto-B-Roll")
+        if broll_bin:
+            print("Creado nuevo bin: Auto-B-Roll")
+        else:
+            print("AVISO: No se pudo crear bin, usando root")
     
-    media_pool.SetCurrentFolder(broll_bin)
+    if broll_bin:
+        media_pool.SetCurrentFolder(broll_bin)
     
-    # Importar clips
-    imported_items = {{}}
+    # Importar archivos y guardar referencia
+    imported = 0
+    failed = 0
+    imported_items = []  # Lista de (mediaPoolItem, clip_data)
     
-    for clip_data in IMPORT_DATA["clips"]:
-        asset_path = clip_data["asset_path"]
-        keyword = clip_data["keyword"]
+    for clip_data in clips:
+        asset_path = clip_data.get("asset_path", "")
         
-        if not Path(asset_path).exists():
-            print(f"⚠️ Archivo no encontrado: {{asset_path}}")
+        if not asset_path:
+            print("X Sin ruta de archivo")
+            failed += 1
             continue
         
-        # Importar al Media Pool
-        items = media_pool.ImportMedia([asset_path])
+        # Verificar si existe
+        if not os.path.exists(asset_path):
+            print(f"X No existe: {{os.path.basename(asset_path)}}")
+            failed += 1
+            continue
         
-        if items and len(items) > 0:
-            item = items[0]
-            imported_items[asset_path] = item
-            print(f"✓ Importado: {{keyword}} -> {{Path(asset_path).name}}")
+        # Intentar importar
+        result = media_pool.ImportMedia([asset_path])
+        
+        if result and len(result) > 0:
+            print(f"+ {{os.path.basename(asset_path)}}")
+            imported += 1
+            imported_items.append((result[0], clip_data))
         else:
-            print(f"✗ Error importando: {{asset_path}}")
+            print(f"X Error: {{os.path.basename(asset_path)}}")
+            failed += 1
     
     print("-" * 50)
-    print(f"Importados: {{len(imported_items)}} archivos")
+    print(f"Importados: {{imported}}, Fallidos: {{failed}}")
+    
+    if not imported_items:
+        print("No se importaron archivos.")
+        return
     
     # Insertar en timeline
+    if not timeline:
+        print("")
+        print("No hay timeline activo.")
+        print("Los assets estan en Media Pool > Auto-B-Roll")
+        print("Cralos manualmente al timeline")
+        return
+    
+    print("")
+    print("Insertando en timeline...")
+    
+    # Obtener FPS del timeline
+    fps = 24.0
+    try:
+        fps_str = timeline.GetSetting("timelineFrameRate")
+        if fps_str:
+            fps = float(fps_str.replace(" DF", ""))
+    except:
+        pass
+    
+    print(f"FPS: {{fps}}")
+    
+    # Obtener frame de inicio del timeline
+    timeline_start = timeline.GetStartFrame()
+    print(f"Timeline start frame: {{timeline_start}}")
+    
     target_track = IMPORT_DATA.get("target_track", 2)
     
-    # Asegurar que hay suficientes tracks
-    current_tracks = timeline.GetTrackCount("video")
-    while current_tracks < target_track:
+    # Asegurar que existe el track
+    current_video_tracks = timeline.GetTrackCount("video")
+    while current_video_tracks < target_track:
         timeline.AddTrack("video")
-        current_tracks += 1
+        current_video_tracks += 1
+        print(f"Creado video track {{current_video_tracks}}")
+    
+    print(f"Target: Video Track {{target_track}}")
+    print("")
     
     inserted = 0
-    for clip_data in IMPORT_DATA["clips"]:
-        asset_path = clip_data["asset_path"]
+    
+    for mpi, clip_data in imported_items:
+        start_time = clip_data.get("start_time", 0)
+        duration = clip_data.get("duration", 3.0)
         
-        if asset_path not in imported_items:
-            continue
-        
-        item = imported_items[asset_path]
-        start_time = clip_data["start_time"]
-        duration = clip_data["duration"]
-        
-        # Convertir a frames
-        start_frame = int(start_time * fps)
+        # Calcular frames (relativo al inicio del timeline)
+        record_frame = timeline_start + int(start_time * fps)
         duration_frames = int(duration * fps)
         
-        # Insertar en timeline
+        # Si la duracion es 0, usar al menos 1 segundo
+        if duration_frames < 1:
+            duration_frames = int(fps)
+        
+        # Crear clip info para AppendToTimeline
         clip_info = {{
-            "mediaPoolItem": item,
+            "mediaPoolItem": mpi,
             "startFrame": 0,
             "endFrame": duration_frames,
             "trackIndex": target_track,
-            "recordFrame": start_frame,
+            "recordFrame": record_frame
         }}
         
+        keyword = clip_data.get("keyword", "unknown")[:20]
+        
+        # Insertar
         result = media_pool.AppendToTimeline([clip_info])
         
         if result:
+            print(f"+ {{keyword}} @ frame {{record_frame}} ({{start_time:.1f}}s)")
             inserted += 1
-            print(f"✓ Insertado en {{start_time:.2f}}s: {{clip_data['keyword']}}")
         else:
-            print(f"✗ Error insertando: {{clip_data['keyword']}}")
+            print(f"X {{keyword}} @ frame {{record_frame}}")
     
     print("-" * 50)
-    print(f"¡Completado! {{inserted}} clips insertados en Track {{target_track}}")
+    print(f"RESULTADO: {{inserted}} clips en Track {{target_track}}")
+    
+    if inserted > 0:
+        print("")
+        print("Si no ves los clips, ve al inicio del timeline")
+        print("o presiona Home para ir al frame 0")
+    
+    print("=" * 50)
+    print("FIN DEL SCRIPT")
+    print("=" * 50)
 
-if __name__ == "__main__":
-    main()
+# Ejecutar al cargar
+main()
 '''
     
     def __init__(self, output_dir: Optional[Path] = None):

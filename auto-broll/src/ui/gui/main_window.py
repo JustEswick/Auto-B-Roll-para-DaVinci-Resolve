@@ -362,17 +362,8 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def _on_assets_selected(self, assets) -> None:
         """Maneja los assets seleccionados para inserción."""
-        if not assets:
-            return
-        
-        # TODO: Implementar inserción en DaVinci Resolve
-        from PySide6.QtWidgets import QMessageBox
-        QMessageBox.information(
-            self,
-            "Assets Seleccionados",
-            f"Se han seleccionado {len(assets)} assets para inserción.\n\n"
-            "La inserción en DaVinci Resolve estará disponible en una próxima versión."
-        )
+        # Esta señal ya no se usa porque la exportación se hace desde preview_panel
+        pass
     
     def _setup_menu(self) -> None:
         """Configura el menú de la aplicación."""

@@ -270,6 +270,7 @@ class PreviewPanel(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self._concept_sections: List[ConceptSection] = []
+        self._search_results: dict = {}  # Almacena StockAssets por keyword
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -558,13 +559,66 @@ class PreviewPanel(QWidget):
     @Slot()
     def _on_download(self) -> None:
         """Descarga los assets seleccionados."""
-        from PySide6.QtWidgets import QMessageBox, QFileDialog
+        from PySide6.QtWidgets import QMessageBox, QFileDialog, QProgressDialog
+        from PySide6.QtCore import Qt
+        from pathlib import Path
+        import httpx
+        import re
+        import unicodedata
+        
+        def sanitize_filename(name: str) -> str:
+            """Limpia un nombre para usarlo como archivo."""
+            # Normalizar unicode y remover acentos
+            name = unicodedata.normalize('NFKD', name)
+            name = name.encode('ascii', 'ignore').decode('ascii')
+            # Remover caracteres no válidos
+            name = re.sub(r'[^\w\s-]', '', name)
+            # Reemplazar espacios con guiones bajos
+            name = re.sub(r'[\s]+', '_', name)
+            return name[:30] if name else 'asset'
         
         selected_ids = []
         for section in self._concept_sections:
             selected_ids.extend(section.get_selected_assets())
         
+        print(f"[DEBUG] Selected IDs count: {len(selected_ids)}")
+        
         if not selected_ids:
+            QMessageBox.warning(
+                self,
+                "Sin selección",
+                "Por favor selecciona al menos un asset para descargar."
+            )
+            return
+        
+        # Obtener assets seleccionados con sus datos completos
+        selected_assets = []
+        print(f"[DEBUG] Search results keys: {list(self._search_results.keys())}")
+        
+        for keyword, assets in self._search_results.items():
+            for asset in assets:
+                if asset.id in selected_ids:
+                    download_url = getattr(asset, 'download_url', '') or getattr(asset, 'url', '')
+                    if download_url:
+                        selected_assets.append({
+                            'id': asset.id,
+                            'keyword': keyword,
+                            'type': asset.type.value if hasattr(asset.type, 'value') else str(asset.type),
+                            'download_url': download_url,
+                        })
+                    else:
+                        print(f"[DEBUG] Asset {asset.id} sin download_url")
+        
+        print(f"[DEBUG] Selected assets with URLs: {len(selected_assets)}")
+        
+        if not selected_assets:
+            QMessageBox.warning(
+                self,
+                "Error", 
+                f"No se encontraron URLs de descarga.\n\n"
+                f"IDs seleccionados: {len(selected_ids)}\n"
+                f"IDs en resultados: {sum(len(a) for a in self._search_results.values())}"
+            )
             return
         
         # Seleccionar carpeta de destino
@@ -574,47 +628,198 @@ class PreviewPanel(QWidget):
             "",
         )
         
-        if folder:
-            QMessageBox.information(
+        if not folder:
+            return
+        
+        download_path = Path(folder)
+        
+        # Crear diálogo de progreso
+        progress = QProgressDialog(
+            "Descargando assets...",
+            "Cancelar",
+            0, len(selected_assets),
+            self
+        )
+        progress.setWindowTitle("Descargando")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        
+        downloaded = []
+        errors = []
+        
+        for i, asset in enumerate(selected_assets):
+            if progress.wasCanceled():
+                break
+            
+            progress.setLabelText(f"Descargando {i+1}/{len(selected_assets)}...")
+            progress.setValue(i)
+            
+            # Generar nombre de archivo único: índice + keyword + id
+            ext = '.mp4' if asset['type'] == 'video' else '.jpg'
+            safe_name = sanitize_filename(asset['keyword'])
+            filename = f"{i+1:02d}_{safe_name}_{asset['id'][:8]}{ext}"
+            filepath = download_path / filename
+            
+            try:
+                # Descargar con httpx (síncrono para simplicidad)
+                with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                    response = client.get(asset['download_url'])
+                    response.raise_for_status()
+                    
+                    with open(filepath, 'wb') as f:
+                        f.write(response.content)
+                    
+                    downloaded.append(filename)
+                    
+            except Exception as e:
+                errors.append(f"{asset['keyword'][:20]}: {str(e)[:50]}")
+        
+        progress.setValue(len(selected_assets))
+        progress.close()
+        
+        # Mostrar resultado
+        if downloaded:
+            msg = f"✅ Descargados {len(downloaded)} assets a:\n{download_path}\n\n"
+            if errors:
+                msg += f"⚠️ {len(errors)} errores:\n" + "\n".join(errors[:5])
+            
+            QMessageBox.information(self, "Descarga Completada", msg)
+        else:
+            QMessageBox.warning(
                 self,
-                "Descarga",
-                f"Se descargarán {len(selected_ids)} assets a:\n{folder}\n\n"
-                "Esta funcionalidad se conectará con el servicio de descarga."
+                "Error",
+                f"No se pudo descargar ningún asset.\n\nErrores:\n" + "\n".join(errors[:5])
             )
-            # TODO: Conectar con services.start_download()
     
     @Slot()
     def _on_export_davinci(self) -> None:
         """Genera script de importación para DaVinci Resolve."""
         from PySide6.QtWidgets import QMessageBox, QFileDialog
         from pathlib import Path
+        import re
+        import unicodedata
+        
+        def sanitize_filename(name: str) -> str:
+            """Limpia un nombre para usarlo como archivo."""
+            name = unicodedata.normalize('NFKD', name)
+            name = name.encode('ascii', 'ignore').decode('ascii')
+            name = re.sub(r'[^\w\s-]', '', name)
+            name = re.sub(r'[\s]+', '_', name)
+            return name[:30] if name else 'asset'
         
         selected_ids = []
         for section in self._concept_sections:
             selected_ids.extend(section.get_selected_assets())
         
         if not selected_ids:
+            QMessageBox.warning(
+                self,
+                "Sin selección",
+                "Por favor selecciona al menos un asset para exportar."
+            )
             return
         
-        # Obtener carpeta de scripts de DaVinci (Edit/Auto-B-Roll)
-        import os
-        appdata = os.environ.get("APPDATA", "")
-        scripts_folder = Path(appdata) / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Edit" / "Auto-B-Roll"
+        # Obtener assets seleccionados con sus datos completos
+        selected_assets = []
+        for keyword, assets in self._search_results.items():
+            for asset in assets:
+                if asset.id in selected_ids:
+                    selected_assets.append({
+                        'id': asset.id,
+                        'keyword': keyword,
+                        'source': asset.source,
+                        'type': asset.type.value if hasattr(asset.type, 'value') else str(asset.type),
+                        'download_url': getattr(asset, 'download_url', '') or getattr(asset, 'url', ''),
+                        'thumbnail_url': getattr(asset, 'thumbnail_url', ''),
+                    })
         
-        if not scripts_folder.exists():
-            scripts_folder.mkdir(parents=True, exist_ok=True)
+        if not selected_assets:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No se encontraron datos de los assets seleccionados."
+            )
+            return
         
-        QMessageBox.information(
+        # Preguntar por la carpeta de descarga
+        download_folder = QFileDialog.getExistingDirectory(
             self,
-            "Exportar a DaVinci",
-            f"Se generará un script para {len(selected_ids)} assets.\n\n"
-            f"Script guardado en:\n{scripts_folder}\n\n"
-            "Pasos para usar:\n"
-            "1. Primero descarga los assets\n"
-            "2. Abre DaVinci Resolve\n"
-            "3. Ve a Workspace → Scripts → Edit → Auto-B-Roll\n"
-            "4. Los assets se importarán al timeline"
+            "Seleccionar carpeta donde están los assets descargados",
+            ""
         )
+        
+        if not download_folder:
+            return  # Usuario canceló
+        
+        download_path = Path(download_folder)
+        
+        try:
+            # Generar script de DaVinci
+            from src.davinci.script_generator import DaVinciScriptGenerator, ImportJob, BRollClip
+            
+            # Crear clips para el script (usando paths estimados)
+            clips = []
+            for i, asset in enumerate(selected_assets):
+                # Nombre de archivo único (mismo formato que download)
+                ext = '.mp4' if asset['type'] == 'video' else '.jpg'
+                safe_name = sanitize_filename(asset['keyword'])
+                filename = f"{i+1:02d}_{safe_name}_{asset['id'][:8]}{ext}"
+                asset_path = download_path / filename
+                
+                clips.append(BRollClip(
+                    asset_path=str(asset_path),
+                    keyword=asset['keyword'],
+                    start_time=i * 3.0,  # Placeholder: cada 3 segundos
+                    end_time=(i + 1) * 3.0,
+                    duration=3.0,
+                    track_index=2
+                ))
+            
+            job = ImportJob(
+                project_name="Auto-B-Roll Project",
+                clips=clips,
+                target_track=2,
+                frame_rate=24.0
+            )
+            
+            generator = DaVinciScriptGenerator()
+            
+            # Generar y guardar script
+            script_path = generator.generate_script(job, "auto_broll_import")
+            
+            # Copiar a carpeta de DaVinci
+            installed_path = generator.install_script(script_path)
+            
+            # Crear archivo de URLs para descarga manual (temporal)
+            urls_file = download_path / "assets_urls.txt"
+            with open(urls_file, "w", encoding="utf-8") as f:
+                f.write("# URLs de assets para descargar\n")
+                f.write("# Descarga estos archivos y guarda con los nombres indicados\n\n")
+                for asset in selected_assets:
+                    ext = '.mp4' if asset['type'] == 'video' else '.jpg'
+                    filename = f"{asset['keyword'][:30].replace(' ', '_')}_{asset['id'][:8]}{ext}"
+                    f.write(f"{filename}\n")
+                    f.write(f"  URL: {asset['download_url']}\n\n")
+            
+            QMessageBox.information(
+                self,
+                "✅ Script Generado",
+                f"Script de DaVinci creado exitosamente.\n\n"
+                f"📁 Script instalado en:\n{installed_path}\n\n"
+                f"📝 Lista de URLs guardada en:\n{urls_file}\n\n"
+                "Pasos siguientes:\n"
+                "1. Descarga los assets usando las URLs del archivo\n"
+                "2. Abre DaVinci Resolve\n"
+                "3. Ve a Workspace → Scripts → Edit → Auto-B-Roll\n"
+                "4. Ejecuta 'auto_broll_import'"
+            )
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"No se pudo generar el script:\n{e}"
+            )
         
         # Emitir señal para procesar
         self.assets_approved.emit(selected_ids)
@@ -653,6 +858,9 @@ class PreviewPanel(QWidget):
         print(f"[DEBUG] PreviewPanel.load_search_results recibido: {len(results)} keywords")
         
         self.clear_concepts()
+        
+        # Almacenar resultados completos para uso posterior
+        self._search_results = results
         
         for keyword, assets in results.items():
             if not assets:
