@@ -22,8 +22,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QCheckBox,
 )
-from PySide6.QtCore import Qt, Signal, Slot, QSize
+from PySide6.QtCore import Qt, Signal, Slot, QSize, QThread, QByteArray
 from PySide6.QtGui import QPixmap
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from urllib.request import urlopen
+import ssl
 
 
 @dataclass
@@ -38,6 +41,47 @@ class AssetPreview:
     selected: bool = False
 
 
+class ThumbnailLoader(QThread):
+    """Worker para cargar thumbnails de forma asíncrona."""
+    
+    loaded = Signal(str, bytes)  # asset_id, image_data
+    error = Signal(str)  # error message
+    
+    def __init__(self, asset_id: str, url: str, parent=None):
+        super().__init__(parent)
+        self._asset_id = asset_id
+        self._url = url
+    
+    def run(self):
+        try:
+            from urllib.request import Request
+            from src.config import get_config
+            
+            # Crear request con headers
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            
+            # Agregar API key de Pexels si es URL de Pexels
+            if 'pexels.com' in self._url:
+                config = get_config()
+                if config.api_keys.pexels:
+                    headers['Authorization'] = config.api_keys.pexels
+            
+            request = Request(self._url, headers=headers)
+            
+            # Crear contexto SSL que ignora verificación
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            
+            with urlopen(request, timeout=10, context=ctx) as response:
+                data = response.read()
+                self.loaded.emit(self._asset_id, data)
+        except Exception as e:
+            self.error.emit(str(e))
+
+
 class AssetCard(QFrame):
     """Tarjeta de preview de un asset."""
     
@@ -49,12 +93,19 @@ class AssetCard(QFrame):
         keyword: str,
         source: str,
         asset_type: str,
+        thumbnail_url: str = "",
         parent: Optional[QWidget] = None
     ):
         super().__init__(parent)
         self._asset_id = asset_id
         self._selected = False
+        self._thumbnail_url = thumbnail_url
+        self._loader = None
         self._setup_ui(keyword, source, asset_type)
+        
+        # Cargar thumbnail si hay URL
+        if thumbnail_url:
+            self._load_thumbnail()
     
     def _setup_ui(self, keyword: str, source: str, asset_type: str) -> None:
         self.setFixedSize(280, 240)  # Tamaño amplio
@@ -164,6 +215,40 @@ class AssetCard(QFrame):
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
         self._update_style()
+    
+    def _load_thumbnail(self) -> None:
+        """Inicia la carga del thumbnail."""
+        print(f"[THUMB] Cargando: {self._thumbnail_url[:80]}...")
+        self._loader = ThumbnailLoader(self._asset_id, self._thumbnail_url, self)
+        self._loader.loaded.connect(self._on_thumbnail_loaded)
+        self._loader.error.connect(self._on_thumbnail_error)
+        self._loader.start()
+    
+    @Slot(str)
+    def _on_thumbnail_error(self, error: str) -> None:
+        """Maneja errores de carga."""
+        print(f"[THUMB ERROR] {self._asset_id}: {error}")
+    
+    @Slot(str, bytes)
+    def _on_thumbnail_loaded(self, asset_id: str, data: bytes) -> None:
+        """Muestra el thumbnail cuando se carga."""
+        print(f"[THUMB OK] {asset_id}, bytes: {len(data)}")
+        if asset_id != self._asset_id:
+            return
+        
+        pixmap = QPixmap()
+        if pixmap.loadFromData(data):
+            # Escalar manteniendo proporción
+            scaled = pixmap.scaled(
+                256, 150,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            )
+            self.thumbnail_label.setPixmap(scaled)
+            self.thumbnail_label.setText("")
+        else:
+            print(f"[THUMB] No se pudo crear pixmap")
+        self._loader = None
 
 
 class ManualKeywordItem(QFrame):
@@ -600,9 +685,9 @@ class ConceptSection(QFrame):
     # Señal para notificar cuando cambia la selección de un asset
     selection_changed = Signal(str, bool)  # asset_id, selected
     
-    def add_asset(self, asset_id: str, source: str, asset_type: str) -> AssetCard:
+    def add_asset(self, asset_id: str, source: str, asset_type: str, thumbnail_url: str = "") -> AssetCard:
         """Añade un asset a la sección."""
-        card = AssetCard(asset_id, self._keyword, source, asset_type)
+        card = AssetCard(asset_id, self._keyword, source, asset_type, thumbnail_url)
         self._asset_cards.append(card)
         # Insertar antes del stretch (último elemento)
         insert_pos = self.assets_layout.count() - 1
@@ -1230,10 +1315,14 @@ class PreviewPanel(QWidget):
             section = self.add_concept(clean_keyword, "")
             
             for asset in assets[:5]:  # Máximo 5 assets por concepto
+                # Obtener URL del thumbnail
+                thumbnail_url = getattr(asset, 'preview_url', '') or getattr(asset, 'thumbnail_url', '') or ''
+                
                 section.add_asset(
                     asset.id,
                     asset.source,
-                    asset.type.value if hasattr(asset.type, 'value') else str(asset.type)
+                    asset.type.value if hasattr(asset.type, 'value') else str(asset.type),
+                    thumbnail_url
                 )
         
         self._update_stats()

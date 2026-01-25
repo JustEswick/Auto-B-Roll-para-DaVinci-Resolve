@@ -223,8 +223,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.setWindowTitle("Auto-B-Roll para DaVinci Resolve")
-        self.setMinimumSize(1200, 800)
-        self.resize(1400, 900)
+        self.setMinimumSize(1400, 850)
+        self.resize(1600, 950)
         
         # Aplicar estilos globales
         self._apply_global_styles()
