@@ -557,14 +557,45 @@ class ConceptSection(QFrame):
         
         layout.addLayout(header_layout)
         
-        # Container con scroll horizontal para assets
+        # Scroll horizontal para assets
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setFixedHeight(220)  # Altura fija para la galería
+        scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: transparent;
+                border: none;
+            }
+            QScrollBar:horizontal {
+                background-color: #1E1E2E;
+                height: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #4B5563;
+                border-radius: 5px;
+                min-width: 40px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #6366F1;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                width: 0px;
+            }
+        """)
+        
+        # Container de assets dentro del scroll
         assets_container = QWidget()
+        assets_container.setStyleSheet("background-color: transparent;")
         self.assets_layout = QHBoxLayout(assets_container)
         self.assets_layout.setContentsMargins(0, 0, 0, 0)
-        self.assets_layout.setSpacing(16)  # Más espacio entre tarjetas
+        self.assets_layout.setSpacing(16)
         self.assets_layout.addStretch()
         
-        layout.addWidget(assets_container)
+        scroll.setWidget(assets_container)
+        layout.addWidget(scroll)
     
     # Señal para notificar cuando cambia la selección de un asset
     selection_changed = Signal(str, bool)  # asset_id, selected
@@ -915,8 +946,6 @@ class PreviewPanel(QWidget):
         for section in self._concept_sections:
             selected_ids.extend(section.get_selected_assets())
         
-        print(f"[DEBUG] Selected IDs count: {len(selected_ids)}")
-        
         if not selected_ids:
             QMessageBox.warning(
                 self,
@@ -927,7 +956,6 @@ class PreviewPanel(QWidget):
         
         # Obtener assets seleccionados con sus datos completos
         selected_assets = []
-        print(f"[DEBUG] Search results keys: {list(self._search_results.keys())}")
         
         for keyword, assets in self._search_results.items():
             for asset in assets:
@@ -940,10 +968,6 @@ class PreviewPanel(QWidget):
                             'type': asset.type.value if hasattr(asset.type, 'value') else str(asset.type),
                             'download_url': download_url,
                         })
-                    else:
-                        print(f"[DEBUG] Asset {asset.id} sin download_url")
-        
-        print(f"[DEBUG] Selected assets with URLs: {len(selected_assets)}")
         
         if not selected_assets:
             QMessageBox.warning(
@@ -1189,8 +1213,6 @@ class PreviewPanel(QWidget):
         Args:
             results: Dict {keyword: [StockAsset, ...]}
         """
-        print(f"[DEBUG] PreviewPanel.load_search_results recibido: {len(results)} keywords")
-        
         self.clear_concepts()
         
         # Almacenar resultados completos para uso posterior
@@ -1205,8 +1227,6 @@ class PreviewPanel(QWidget):
             if not clean_keyword or len(clean_keyword) < 2:
                 continue  # Skip keywords vacías o muy cortas
             
-            print(f"[DEBUG]   Agregando concepto '{clean_keyword}' con {len(assets)} assets")
-            
             section = self.add_concept(clean_keyword, "")
             
             for asset in assets[:5]:  # Máximo 5 assets por concepto
@@ -1217,5 +1237,4 @@ class PreviewPanel(QWidget):
                 )
         
         self._update_stats()
-        print(f"[DEBUG] PreviewPanel: {len(self._concept_sections)} secciones cargadas")
 

@@ -719,7 +719,7 @@ class SettingsPanel(QWidget):
                 
         except Exception as e:
             # Si falla la carga, usar valores por defecto (ya están en los widgets)
-            print(f"[DEBUG] No se pudo cargar config: {e}")
+            pass  # Usar valores por defecto si falla la carga
     
     @Slot()
     def _on_reset(self) -> None:

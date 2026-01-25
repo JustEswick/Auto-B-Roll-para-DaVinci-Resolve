@@ -347,19 +347,14 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_analysis_ready(self, result) -> None:
         """Maneja el resultado del análisis semántico."""
-        print(f"[DEBUG] _on_analysis_ready recibido, result: {result}")
-        
         # Extraer keywords para búsqueda
         keywords = result.get_unique_search_terms()[:10]
-        
-        print(f"[DEBUG] Keywords extraídas: {keywords}")
         
         if keywords:
             # Cambiar al panel de preview
             self.sidebar.buttons[2].click()
             
             # Iniciar búsqueda con las keywords
-            print(f"[DEBUG] Iniciando búsqueda con {len(keywords)} keywords")
             from src.services import get_services
             services = get_services()
             services.start_search(keywords, asset_type="video", per_keyword=5)
@@ -373,13 +368,10 @@ class MainWindow(QMainWindow):
     @Slot(list)
     def _on_manual_keywords_search(self, keywords_data: list) -> None:
         """Maneja la búsqueda de keywords manuales."""
-        print(f"[DEBUG] _on_manual_keywords_search: {keywords_data}")
-        
         # Extraer solo las keywords (el timestamp se guardará para después)
         keywords = [item["keyword"] for item in keywords_data]
         
         if keywords:
-            print(f"[DEBUG] Iniciando búsqueda manual con {len(keywords)} keywords")
             from src.services import get_services
             services = get_services()
             services.start_search(keywords, asset_type="video", per_keyword=5)

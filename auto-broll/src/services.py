@@ -170,13 +170,9 @@ class SearchWorker(QThread):
         from src.stock.aggregator import StockAggregator
         from src.stock.base import AssetType
         
-        print(f"[DEBUG] Iniciando búsqueda con keywords: {self.keywords}")
         self.progress.emit(0.1, "Inicializando búsqueda...")
         
         aggregator = StockAggregator()
-        
-        print(f"[DEBUG] APIs configuradas: {aggregator.available_apis}")
-        print(f"[DEBUG] is_any_configured: {aggregator.is_any_configured()}")
         
         if not aggregator.is_any_configured():
             raise RuntimeError(
@@ -199,18 +195,15 @@ class SearchWorker(QThread):
                 f"Buscando '{keyword}'... ({i + 1}/{total})"
             )
             
-            print(f"[DEBUG] Buscando keyword: {keyword}")
             assets = await aggregator.search(
                 keyword,
                 asset_type=asset_type,
                 per_api=self.per_keyword
             )
-            print(f"[DEBUG] Encontrados {len(assets)} assets para '{keyword}'")
             results[keyword] = assets
         
         await aggregator.close()
         
-        print(f"[DEBUG] Búsqueda completada. Total keywords: {len(results)}")
         self.progress.emit(1.0, "Búsqueda completada")
         return results
 
