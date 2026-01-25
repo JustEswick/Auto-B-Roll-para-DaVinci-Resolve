@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QProgressBar,
+    QLineEdit,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal, Slot, QSize
 from PySide6.QtGui import QPixmap
@@ -162,6 +164,323 @@ class AssetCard(QFrame):
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
         self._update_style()
+
+
+class ManualKeywordItem(QFrame):
+    """Widget para una keyword manual en la lista."""
+    
+    selection_changed = Signal(str, bool)  # keyword, selected
+    delete_requested = Signal(str)  # keyword
+    
+    def __init__(self, keyword: str, timestamp: str = "", parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._keyword = keyword
+        self._timestamp = timestamp
+        self._selected = True  # Seleccionado por defecto
+        self._setup_ui()
+    
+    def _setup_ui(self) -> None:
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #1E1E2E;
+                border-radius: 6px;
+                padding: 4px;
+            }
+        """)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(10)
+        
+        # Checkbox
+        self.checkbox = QCheckBox()
+        self.checkbox.setChecked(True)
+        self.checkbox.setStyleSheet("""
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #6366F1;
+                border-radius: 4px;
+            }
+            QCheckBox::indicator:unchecked {
+                background-color: #374151;
+                border-radius: 4px;
+            }
+        """)
+        self.checkbox.toggled.connect(self._on_toggled)
+        layout.addWidget(self.checkbox)
+        
+        # Keyword label
+        keyword_label = QLabel(self._keyword)
+        keyword_label.setStyleSheet("color: #FFFFFF; font-size: 13px;")
+        layout.addWidget(keyword_label, 1)
+        
+        # Timestamp label
+        time_text = self._timestamp if self._timestamp else "-"
+        time_label = QLabel(time_text)
+        time_label.setStyleSheet("color: #6B7280; font-size: 12px; min-width: 50px;")
+        time_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(time_label)
+        
+        # Delete button
+        delete_btn = QPushButton("🗑️")
+        delete_btn.setFixedSize(28, 28)
+        delete_btn.setCursor(Qt.PointingHandCursor)
+        delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(239, 68, 68, 0.2);
+                border-radius: 4px;
+            }
+        """)
+        delete_btn.clicked.connect(lambda: self.delete_requested.emit(self._keyword))
+        layout.addWidget(delete_btn)
+    
+    def _on_toggled(self, checked: bool) -> None:
+        self._selected = checked
+        self.selection_changed.emit(self._keyword, checked)
+    
+    @property
+    def keyword(self) -> str:
+        return self._keyword
+    
+    @property
+    def timestamp(self) -> str:
+        return self._timestamp
+    
+    @property
+    def is_selected(self) -> bool:
+        return self._selected
+
+
+class ManualKeywordsSection(QFrame):
+    """Sección para agregar y gestionar keywords manuales."""
+    
+    search_requested = Signal(list)  # Lista de dicts con keyword y timestamp
+    
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._keyword_items: List[ManualKeywordItem] = []
+        self._setup_ui()
+    
+    def _setup_ui(self) -> None:
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #13131A;
+                border: 1px solid #2D2D44;
+                border-radius: 10px;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(12)
+        
+        # Header
+        header = QLabel("➕ Agregar Keywords Manuales")
+        header.setStyleSheet("""
+            QLabel {
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 600;
+            }
+        """)
+        layout.addWidget(header)
+        
+        # Input row
+        input_frame = QFrame()
+        input_frame.setStyleSheet("background-color: transparent; border: none;")
+        input_layout = QHBoxLayout(input_frame)
+        input_layout.setContentsMargins(0, 0, 0, 0)
+        input_layout.setSpacing(10)
+        
+        # Keyword input
+        self.keyword_input = QLineEdit()
+        self.keyword_input.setPlaceholderText("Escribe una palabra clave...")
+        self.keyword_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #1E1E2E;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #6366F1;
+            }
+        """)
+        self.keyword_input.returnPressed.connect(self._on_add_keyword)
+        input_layout.addWidget(self.keyword_input, 2)
+        
+        # Timestamp input
+        time_label = QLabel("Tiempo:")
+        time_label.setStyleSheet("color: #9CA3AF; font-size: 12px;")
+        input_layout.addWidget(time_label)
+        
+        self.timestamp_input = QLineEdit()
+        self.timestamp_input.setPlaceholderText("00:00")
+        self.timestamp_input.setMaximumWidth(70)
+        self.timestamp_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #1E1E2E;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border-color: #6366F1;
+            }
+        """)
+        self.timestamp_input.returnPressed.connect(self._on_add_keyword)
+        input_layout.addWidget(self.timestamp_input)
+        
+        # Add button
+        add_btn = QPushButton("+ Agregar")
+        add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4B5563;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #6B7280;
+            }
+        """)
+        add_btn.clicked.connect(self._on_add_keyword)
+        input_layout.addWidget(add_btn)
+        
+        layout.addWidget(input_frame)
+        
+        # Keywords list container
+        self.keywords_container = QWidget()
+        self.keywords_layout = QVBoxLayout(self.keywords_container)
+        self.keywords_layout.setContentsMargins(0, 0, 0, 0)
+        self.keywords_layout.setSpacing(6)
+        self.keywords_container.setVisible(False)
+        layout.addWidget(self.keywords_container)
+        
+        # Search button
+        self.search_btn = QPushButton("🔍 Buscar Assets")
+        self.search_btn.setEnabled(False)
+        self.search_btn.setMinimumHeight(40)
+        self.search_btn.setCursor(Qt.PointingHandCursor)
+        self.search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6366F1;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #5558E3;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6B7280;
+            }
+        """)
+        self.search_btn.clicked.connect(self._on_search)
+        layout.addWidget(self.search_btn)
+    
+    @Slot()
+    def _on_add_keyword(self) -> None:
+        """Agrega una keyword a la lista."""
+        keyword = self.keyword_input.text().strip()
+        if not keyword:
+            return
+        
+        # Evitar duplicados
+        existing = [item.keyword.lower() for item in self._keyword_items]
+        if keyword.lower() in existing:
+            self.keyword_input.clear()
+            return
+        
+        timestamp = self.timestamp_input.text().strip()
+        
+        item = ManualKeywordItem(keyword, timestamp)
+        item.selection_changed.connect(self._update_search_button)
+        item.delete_requested.connect(self._on_delete_keyword)
+        
+        self._keyword_items.append(item)
+        self.keywords_layout.addWidget(item)
+        
+        self.keywords_container.setVisible(True)
+        self.keyword_input.clear()
+        self.timestamp_input.clear()
+        self.keyword_input.setFocus()
+        
+        self._update_search_button()
+    
+    @Slot(str)
+    def _on_delete_keyword(self, keyword: str) -> None:
+        """Elimina una keyword de la lista."""
+        for item in self._keyword_items[:]:
+            if item.keyword == keyword:
+                self._keyword_items.remove(item)
+                item.deleteLater()
+                break
+        
+        if not self._keyword_items:
+            self.keywords_container.setVisible(False)
+        
+        self._update_search_button()
+    
+    @Slot()
+    def _update_search_button(self) -> None:
+        """Actualiza el estado del botón de búsqueda."""
+        selected_count = sum(1 for item in self._keyword_items if item.is_selected)
+        self.search_btn.setEnabled(selected_count > 0)
+        
+        if selected_count > 0:
+            self.search_btn.setText(f"🔍 Buscar Assets ({selected_count})")
+        else:
+            self.search_btn.setText("🔍 Buscar Assets")
+    
+    @Slot()
+    def _on_search(self) -> None:
+        """Emite la señal de búsqueda con las keywords seleccionadas."""
+        selected = []
+        for item in self._keyword_items:
+            if item.is_selected:
+                selected.append({
+                    "keyword": item.keyword,
+                    "timestamp": item.timestamp
+                })
+        
+        if selected:
+            self.search_requested.emit(selected)
+    
+    def get_selected_keywords(self) -> List[dict]:
+        """Retorna las keywords seleccionadas."""
+        return [
+            {"keyword": item.keyword, "timestamp": item.timestamp}
+            for item in self._keyword_items
+            if item.is_selected
+        ]
+    
+    def clear_keywords(self) -> None:
+        """Limpia todas las keywords."""
+        for item in self._keyword_items:
+            item.deleteLater()
+        self._keyword_items.clear()
+        self.keywords_container.setVisible(False)
+        self._update_search_button()
 
 
 class ConceptSection(QFrame):
@@ -309,6 +628,10 @@ class PreviewPanel(QWidget):
             }
         """)
         layout.addWidget(description)
+        
+        # Sección de keywords manuales
+        self.manual_keywords_section = ManualKeywordsSection()
+        layout.addWidget(self.manual_keywords_section)
         
         # Stats bar
         stats_frame = QFrame()

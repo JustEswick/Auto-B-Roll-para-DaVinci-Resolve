@@ -332,6 +332,11 @@ class MainWindow(QMainWindow):
         
         # Cuando se guardan settings, refrescar estado de APIs en StatusBar
         self.settings_panel.settings_changed.connect(self._on_settings_changed)
+        
+        # Conectar búsqueda de keywords manuales
+        self.preview_panel.manual_keywords_section.search_requested.connect(
+            self._on_manual_keywords_search
+        )
     
     @Slot()
     def _on_settings_changed(self) -> None:
@@ -364,6 +369,20 @@ class MainWindow(QMainWindow):
         """Maneja los assets seleccionados para inserción."""
         # Esta señal ya no se usa porque la exportación se hace desde preview_panel
         pass
+    
+    @Slot(list)
+    def _on_manual_keywords_search(self, keywords_data: list) -> None:
+        """Maneja la búsqueda de keywords manuales."""
+        print(f"[DEBUG] _on_manual_keywords_search: {keywords_data}")
+        
+        # Extraer solo las keywords (el timestamp se guardará para después)
+        keywords = [item["keyword"] for item in keywords_data]
+        
+        if keywords:
+            print(f"[DEBUG] Iniciando búsqueda manual con {len(keywords)} keywords")
+            from src.services import get_services
+            services = get_services()
+            services.start_search(keywords, asset_type="video", per_keyword=5)
     
     def _setup_menu(self) -> None:
         """Configura el menú de la aplicación."""
